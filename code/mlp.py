@@ -6,11 +6,11 @@ import wandb
 from typing import *
 
 class MLPModule(pl.LightningModule):
-    def __init__(self, input_dim : int, hidden1_dim : int , hidden2_dim : int, hidden3_dim : int, n_classes : int) -> None:
+    def __init__(self, input_dim : int, hidden1_dim : int , hidden2_dim : int, hidden3_dim : int, n_classes : int, batch_norm_only : bool = False) -> None:
         super().__init__()
 
         #Network structure
-        self.batch_n0 = nn.BatchNorm1d(input_dim, affine = False) #the batch normalization at the beginning doesn't have learnable params (?) TODO
+        self.batch_n0 = nn.BatchNorm1d(input_dim, affine = True) #the batch normalization at the beginning doesn't have learnable params (?) TODO
         self.layer_1 = nn.Linear(input_dim, hidden1_dim)
         self.batch_n1 = nn.BatchNorm1d(hidden1_dim)
         self.layer_2 = nn.Linear(hidden1_dim, hidden2_dim)
@@ -20,12 +20,17 @@ class MLPModule(pl.LightningModule):
         self.layer_output = nn.Linear(hidden3_dim, n_classes)
         self.softmax = nn.Softmax(dim  = 1)
 
+        #freeze the weights of the linear layer at random inizialization (if required)
+        self.layer_1.requires_grad_(not(batch_norm_only))
+        self.layer_2.requires_grad_(not(batch_norm_only))
+        self.layer_3.requires_grad_(not(batch_norm_only))
+
         #Loss function
         self.loss_fn = nn.CrossEntropyLoss()
 
         #Metrics
-        self.val_metric = torchmetrics.Accuracy(num_classes = n_classes)
-        self.test_metric = torchmetrics.Accuracy(num_classes = n_classes) #TODO probably just one is needed
+        self.train_loss = 0
+        self.val_loss = 0
 
         #Activation function used
         self.activation = torch.relu
@@ -56,28 +61,42 @@ class MLPModule(pl.LightningModule):
 
     def training_step(self, batch : Tuple[torch.tensor], batch_idx : int) -> torch.tensor:
         out = self.forward(*batch)
-        epoch = self.trainer.current_epoch
-        self.log('step', epoch)
-        self.log("Traning loss", out["loss"].item(), on_step = False ,on_epoch = True, prog_bar = True)
-        wandb.log({"Training loss" : out["loss"].item(), "epoch" : epoch})
+        self.train_loss += out["loss"].item()
         return out["loss"]
+
+    def training_epoch_end(self, outputs: torch.tensor) -> None:
+        epoch = self.trainer.current_epoch + 1
+        n_batches = len(outputs)
+        wandb.log({"training_loss" : self.train_loss/n_batches, "epoch" : epoch})
+        self.train_loss = 0
     
     def validation_step(self, batch : Tuple[torch.tensor], batch_idx : int) -> torch.tensor:
         out = self.forward(*batch)
-        epoch = self.trainer.current_epoch
-        self.val_metric(out["probabilities"], batch[1]) #compute accuracy
-        self.log('step', epoch)
-        self.log("validation accuracy", self.val_metric, on_step = False ,on_epoch = True, prog_bar = True) #log result
-        self.log("Validation loss",out["loss"], on_step = False, on_epoch = True, prog_bar = True)
-        wandb.log({"Validation loss" : out["loss"].item(), "epoch" : epoch})
-        wandb.log({"Validation accuracy" : self.val_metric, "epoch" : epoch})
-        return out["loss"]
+        #self.val_metric(out["probabilities"], batch[1]) #compute accuracy
+        self.val_loss += out["loss"].item()
+        return out["probabilities"],batch[1]
+    
+    def validation_epoch_end(self, outputs: torch.tensor) -> None:
+        epoch = self.trainer.current_epoch + 1
+        n_batches = len(outputs)
+        predictions = torch.cat([ x[0] for x in outputs ])
+        labels = torch.cat([ x[1] for x in outputs])
+        accuracy = torchmetrics.functional.accuracy(predictions, labels).item()
+        loss = self.val_loss/n_batches
+        self.val_loss = 0
+        self.log("val_loss",loss)
+        wandb.log({"validation_loss" : loss, "epoch" : epoch}, commit = False)
+        wandb.log({"validation_accuracy" : accuracy , "epoch" : epoch})
 
     def test_step(self, batch : Tuple[torch.tensor], batch_idx : int) -> torch.tensor:
         out = self.forward(*batch)
-        self.test_metric(out["probabilities"], batch[1]) #compute accuracy
-        self.log("Test accuracy", self.test_metric, on_epoch = True, prog_bar = True) #log result
-        return out["loss"]
+        return out["probabilities"], batch[1]
+
+    def test_epoch_end(self, outputs: torch.tensor) -> None:
+        predictions = torch.cat([ x[0] for x in outputs ])
+        labels = torch.cat([ x[1] for x in outputs])
+        accuracy = torchmetrics.functional.accuracy(predictions, labels).item()
+        wandb.run.summary["test_accuracy"] = accuracy
     
     def configure_optimizers(self) -> torch.optim.Optimizer:
         return torch.optim.Adam(self.parameters())
