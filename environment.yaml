@@ -11,10 +11,10 @@ dependencies:
   - pip
   - python
   - pytorch
-  - pytorch-lightning
   - pip:
     - tensorboard
+    - pytorch-lightning
+    - wandb
   - torchvision
   - pillow
-  - wandb
   - tqdm
