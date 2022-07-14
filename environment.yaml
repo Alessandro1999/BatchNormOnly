@@ -11,6 +11,9 @@ dependencies:
   - pip
   - python
   - pytorch
+  - gensim
+  - pandas
+  - scikit-learn
   - pip:
     - tensorboard
     - pytorch-lightning
