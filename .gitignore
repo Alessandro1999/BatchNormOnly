@@ -2,5 +2,4 @@ lightning_logs
 code/.ipynb_checkpoints
 code/__pycache__
 wandb/
-checkpoints/
 2003.00152.pdf
