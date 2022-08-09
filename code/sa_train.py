@@ -20,9 +20,9 @@ torch.backends.cudnn.benchmark = False
 
 # paths to the datasets and the pretrained embeddings
 train_path: Path = config.ROOT_PATH.joinpath(
-    "data/SA/first100k.csv")
+    "data/SA/training_set.csv")
 test_path: Path = config.ROOT_PATH.joinpath(
-    "data/SA/25ktest.csv")
+    "data/SA/test_set.csv")
 
 embedding_path: Path = config.ROOT_PATH.joinpath(
     "data/SA/Embeddings/glove.wordvectors")
