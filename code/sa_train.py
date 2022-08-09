@@ -53,7 +53,7 @@ if pretrained:
         glove: KeyedVectors = KeyedVectors.load(str(embedding_path))
     except:  # otherwise, download them from gensim
         glove: KeyedVectors = gensim.downloader.load("glove-twitter-200")
-        glove.load(str(embedding_path))
+        glove.save(str(embedding_path))
     finally:
         embeddings = utils.build_pretrained_vectors(glove)
 
