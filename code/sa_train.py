@@ -1,3 +1,6 @@
+'''
+This file contains the code used for the test on SA with a LSTM
+'''
 import torch
 import config
 from pathlib import Path
@@ -30,11 +33,10 @@ min_count = 2
 embedding_dim = 200
 hidden_dim = 100
 bidirectional = False
-batch_norm_only = False
-pretrained = False
+batch_norm_only = True
+pretrained = True
 embeddings: torch.Tensor = None
-p_dropout = 0.5
-epochs = 20
+epochs = 100
 
 # the datamodule used for training and testing
 datamodule = sa_datamodule.SentimentDataModule(train_path,
@@ -42,6 +44,7 @@ datamodule = sa_datamodule.SentimentDataModule(train_path,
                                                train_split=0.1,
                                                train_batch_size=batch_size,
                                                min_count=min_count)
+
 
 # if specified in the hyperparameters, pretrained embeddings are loaded
 if pretrained:
@@ -61,13 +64,12 @@ model = sa_model.SentimentClassifier(len(config.word2id),
                                      n_classes=2,
                                      bidirectional=bidirectional,
                                      batch_norm_only=batch_norm_only,
-                                     dropout=p_dropout,
                                      pretrained=embeddings,
                                      padding_idx=config.word2id[config.PAD_WORD])
 
 # Weights and Biases initialization
 wandb.init(project="Batch-norm-only", entity="ale99")
-wandb.run.name = "Emb"
+wandb.run.name = "[BNO]EmbRELU-NoDrop"
 wandb.define_metric("epoch")
 wandb.define_metric("validation_loss", step_metric="epoch", summary="min")
 wandb.define_metric("validation_accuracy", step_metric="epoch", summary="max")
@@ -81,7 +83,7 @@ checkpoint = callbacks.ModelCheckpoint("checkpoints/",
 # Pytorch lightning trainer
 trainer = pl.Trainer(max_epochs=epochs,
                      gpus=1,
-                     callbacks=[checkpoint])  # define the trainer
+                     callbacks=[checkpoint])
 
 # first test before the training (I expect an accuracy around 50%)
 trainer.test(model=model, datamodule=datamodule)

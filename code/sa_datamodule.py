@@ -1,3 +1,7 @@
+'''
+This file contains the code regarding the pytorch lightning datamodule
+of the test on SA with a LSTM
+'''
 import config
 import utils
 from typing import *
@@ -7,11 +11,20 @@ from pathlib import Path
 from torch.utils import data
 import pandas as pd
 from sklearn.model_selection import train_test_split
-
 from sa_dataset import SentimentDataset
 
 
 class SentimentDataModule(pl.LightningDataModule):
+    '''
+    The datamoodule used for the SA test with LSTM
+    - train_path, the training set path;
+    - test_path, the test set path;
+    - train_split, the percentage of training set used for the validation set;
+    - train_batch_size, the batch size used for the training set;
+    - valid_batch_size(Optional), the batch size for test and validation set, if not given, train_batch_size is used;
+    - min_count, the minimum number of occurrencies in the training set for a word to have its own word embedding. 
+    '''
+
     def __init__(self,
                  train_path: Path,
                  test_path: Path,
@@ -21,11 +34,15 @@ class SentimentDataModule(pl.LightningDataModule):
                  min_count: int = 2) -> None:
         super().__init__()
 
+        # train and validation dataframes
         train_df: pd.DataFrame = utils.load_SA_data(train_path)
         train_df, val_df = train_test_split(
             train_df, test_size=train_split, random_state=config.seed)
+
+        # test set dataframe
         test_df = utils.load_SA_data(test_path)
 
+        # datasets obtained from the dataframe; also the vocabulary is computed
         self.train_data = SentimentDataset(train_df,
                                            is_train=True,
                                            min_count=min_count)
@@ -62,8 +79,9 @@ def collate_fn(batch: List[Tuple[List[str], int]]) -> Dict[str, torch.Tensor]:
     sentences: List[torch.Tensor] = []
     for i, (sentence, label) in enumerate(batch):  # for every sample of the batch
         labels[i] = label  # assign the label
-        lengths[i] = len(sentence)
+        lengths[i] = len(sentence)  # obtain the length
         sentence_tensor = torch.zeros(len(sentence), dtype=torch.int32)
+        # replace each word with its index in the vocabulary
         for w, word in enumerate(sentence):
             word = word.replace(",", " ").replace(".", " ").replace("!", " ").replace(
                 "?", " ").replace("'", " ").replace("(", " ").replace(")", " ").replace("=", " ").lower()
